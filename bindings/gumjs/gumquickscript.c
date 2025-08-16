@@ -69,6 +69,7 @@ struct _GumQuickScript
   GumQuickMemory memory;
   GumQuickModule module;
   GumQuickThread thread;
+  gchar * thread_name;
   GumQuickProcess process;
   GumQuickFile file;
   GumQuickChecksum checksum;
