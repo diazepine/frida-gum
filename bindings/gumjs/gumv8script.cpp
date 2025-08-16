@@ -559,7 +559,9 @@ gum_v8_script_create_context (GumV8Script * self,
         global_templ);
     _gum_v8_api_resolver_init (&self->api_resolver, &self->core, global_templ);
     _gum_v8_symbol_init (&self->symbol, &self->core, global_templ);
+  #ifdef HAVE_CMODULE
     _gum_v8_cmodule_init (&self->cmodule, &self->core, global_templ);
+  #endif /* HAVE_CMODULE */
     _gum_v8_instruction_init (&self->instruction, &self->core, global_templ);
     _gum_v8_code_writer_init (&self->code_writer, &self->core, global_templ);
     _gum_v8_code_relocator_init (&self->code_relocator, &self->code_writer,
@@ -599,7 +601,9 @@ gum_v8_script_create_context (GumV8Script * self,
     _gum_v8_interceptor_realize (&self->interceptor);
     _gum_v8_api_resolver_realize (&self->api_resolver);
     _gum_v8_symbol_realize (&self->symbol);
+  #ifdef HAVE_CMODULE
     _gum_v8_cmodule_realize (&self->cmodule);
+  #endif /* HAVE_CMODULE */
     _gum_v8_instruction_realize (&self->instruction);
     _gum_v8_code_writer_realize (&self->code_writer);
     _gum_v8_code_relocator_realize (&self->code_relocator);
@@ -1145,7 +1149,9 @@ gum_v8_script_destroy_context (GumV8Script * self)
     _gum_v8_code_relocator_dispose (&self->code_relocator);
     _gum_v8_code_writer_dispose (&self->code_writer);
     _gum_v8_instruction_dispose (&self->instruction);
+  #ifdef HAVE_CMODULE
     _gum_v8_cmodule_dispose (&self->cmodule);
+  #endif /* HAVE_CMODULE */
     _gum_v8_symbol_dispose (&self->symbol);
     _gum_v8_api_resolver_dispose (&self->api_resolver);
     _gum_v8_interceptor_dispose (&self->interceptor);
@@ -1182,7 +1188,9 @@ gum_v8_script_destroy_context (GumV8Script * self)
   _gum_v8_code_relocator_finalize (&self->code_relocator);
   _gum_v8_code_writer_finalize (&self->code_writer);
   _gum_v8_instruction_finalize (&self->instruction);
+#ifdef HAVE_CMODULE
   _gum_v8_cmodule_finalize (&self->cmodule);
+#endif /* HAVE_CMODULE */
   _gum_v8_symbol_finalize (&self->symbol);
   _gum_v8_api_resolver_finalize (&self->api_resolver);
   _gum_v8_interceptor_finalize (&self->interceptor);
@@ -1298,12 +1306,37 @@ gum_v8_script_on_runtime_loaded (Local<Value> error,
 }
 
 static void
+gum_v8_cancellable_interrupt_handler (v8::Isolate * isolate,
+                                      void * opaque)
+{
+  if (opaque == NULL)
+    return;
+
+  GCancellable * cancellable = (GCancellable *)opaque;
+  // Increment the reference count to avoid uaf
+  g_object_ref (cancellable);
+
+  g_print ("We are inside the v8 int handler...\n");
+
+  // Check if the operation was cancelled
+  if (g_cancellable_is_cancelled (cancellable))
+  {
+    g_print ("Cancelled inside, throwing...\n");
+    isolate->ThrowException (v8::String::NewFromUtf8 (isolate, "Execution cancelled").ToLocalChecked ());
+  }
+}
+
+static void
 gum_v8_script_execute_entrypoints (GumV8Script * self,
                                    GumScriptTask * task)
 {
   {
     auto isolate = self->isolate;
     auto context = isolate->GetCurrentContext ();
+
+    // Check if the task was provided a cancellable
+    if (task->cancellable != NULL)
+      isolate->RequestInterrupt (gum_v8_cancellable_interrupt_handler, task->cancellable);
 
     auto program = self->program;
     if (program->entrypoints != NULL)

@@ -26,11 +26,14 @@ struct _GumAddCSymbolsOperation
   GumQuickCore * core;
 };
 
+GUMJS_DECLARE_GETTER (gumjs_cmodule_get_available)
 GUMJS_DECLARE_GETTER (gumjs_cmodule_get_builtins)
 static void gum_store_builtin_define (const GumCDefineDetails * details,
     GumGetBuiltinsOperation * op);
 static void gum_store_builtin_header (const GumCHeaderDetails * details,
     GumGetBuiltinsOperation * op);
+static gboolean
+gum_quick_cmodule_check_api_available (JSContext * ctx);
 
 GUMJS_DECLARE_CONSTRUCTOR (gumjs_cmodule_construct)
 static gboolean gum_parse_cmodule_options (JSContext * ctx, JSValue options_val,
@@ -44,6 +47,7 @@ GUMJS_DECLARE_FUNCTION (gumjs_cmodule_dispose)
 
 static const JSCFunctionListEntry gumjs_cmodule_module_entries[] =
 {
+  JS_CGETSET_DEF ("available", gumjs_cmodule_get_available, NULL),
   JS_CGETSET_DEF ("builtins", gumjs_cmodule_get_builtins, NULL),
 };
 
@@ -116,6 +120,8 @@ gum_quick_cmodule_get (JSContext * ctx,
 
 GUMJS_DEFINE_GETTER (gumjs_cmodule_get_builtins)
 {
+  if (!gum_quick_cmodule_check_api_available(ctx))
+    return JS_EXCEPTION;
   JSValue result;
   GumGetBuiltinsOperation op;
 
@@ -136,6 +142,11 @@ GUMJS_DEFINE_GETTER (gumjs_cmodule_get_builtins)
       JS_PROP_C_W_E);
 
   return result;
+}
+
+GUMJS_DEFINE_GETTER (gumjs_cmodule_get_available)
+{
+  return JS_NewBool (ctx, gum_cmodule_api_is_available ());
 }
 
 static void
@@ -165,6 +176,8 @@ gum_store_builtin_header (const GumCHeaderDetails * details,
 
 GUMJS_DEFINE_CONSTRUCTOR (gumjs_cmodule_construct)
 {
+  if (!gum_quick_cmodule_check_api_available(ctx))
+    return JS_EXCEPTION;
   JSValue result;
   GumQuickCModule * parent;
   const gchar * source;
@@ -415,4 +428,17 @@ GUMJS_DEFINE_FUNCTION (gumjs_cmodule_dispose)
   }
 
   return JS_UNDEFINED;
+}
+
+static gboolean
+gum_quick_cmodule_check_api_available (JSContext * ctx)
+{
+  if (!gum_cmodule_api_is_available ())
+  {
+    _gum_quick_throw_literal (ctx,
+        "CModule API is not available on this system");
+    return FALSE;
+  }
+
+  return TRUE;
 }

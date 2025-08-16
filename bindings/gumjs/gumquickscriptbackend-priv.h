@@ -71,6 +71,9 @@ G_GNUC_INTERNAL GumESAsset * gum_es_asset_new (const gchar * name,
 G_GNUC_INTERNAL GumESAsset * gum_es_asset_ref (GumESAsset * asset);
 G_GNUC_INTERNAL void gum_es_asset_unref (GumESAsset * asset);
 
+// need this to tear down script in core
+G_GNUC_INTERNAL void _gum_quick_script_dispose_cancelled_script (GumQuickScript * self);
+
 G_END_DECLS
 
 #endif
