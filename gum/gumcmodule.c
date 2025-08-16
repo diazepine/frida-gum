@@ -7,6 +7,14 @@
 
 #include "gumcmodule.h"
 
+gboolean gum_cmodule_api_is_available(void) {
+  #ifdef HAVE_CMODULE
+    return TRUE;
+  #else
+    return FALSE;
+  #endif
+  }
+
 #include <stdio.h>
 #include <string.h>
 #include <gio/gio.h>

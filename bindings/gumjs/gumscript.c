@@ -73,6 +73,12 @@ gum_script_terminate (GumScript * self)
 }
 
 void
+gum_script_cancel (GumScript * self)
+{
+  GUM_SCRIPT_GET_IFACE (self)->cancel (self);
+}
+
+void
 gum_script_set_message_handler (GumScript * self,
                                 GumScriptMessageHandler handler,
                                 gpointer data,
@@ -111,4 +117,11 @@ GumStalker *
 gum_script_get_stalker (GumScript * self)
 {
   return GUM_SCRIPT_GET_IFACE (self)->get_stalker (self);
+}
+
+void
+gum_script_set_thread_name (GumScript * self,
+                                  const gchar * thread_name)
+{
+  GUM_SCRIPT_GET_IFACE (self)->set_thread_name (self, thread_name);
 }

@@ -385,6 +385,7 @@ TESTLIST_BEGIN (script)
     TESTENTRY (functions_can_be_found_by_matching)
   TESTGROUP_END ()
 
+#ifdef HAVE_CMODULE
   TESTGROUP_BEGIN ("CModule")
 #ifdef HAVE_TINYCC
     TESTENTRY (cmodule_can_be_defined)
@@ -416,6 +417,7 @@ TESTLIST_BEGIN (script)
 #endif
     TESTENTRY (cmodule_builtins_can_be_retrieved)
   TESTGROUP_END ()
+#endif /* HAVE_CMODULE */
 
   TESTGROUP_BEGIN ("Instruction")
     TESTENTRY (instruction_can_be_parsed)

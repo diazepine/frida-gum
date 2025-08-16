@@ -32,6 +32,9 @@
 # include <gum/gumbarebone.h>
 #endif
 
+// XXX for debug prints
+#include "debugprint.h"
+
 #define GUM_QUICK_FFI_FUNCTION_PARAMS_EMPTY { NULL, }
 
 typedef struct _GumQuickWeakCallback GumQuickWeakCallback;
@@ -2130,8 +2133,21 @@ _gum_quick_scope_call (GumQuickScope * self,
 
   result = JS_Call (ctx, func_obj, this_obj, argc, argv);
 
-  if (JS_IsException (result))
-    _gum_quick_scope_catch_and_emit (self);
+  if (JS_IsException (result)) {
+
+    JSValue exception = JS_GetException(ctx);
+    const char *errorCStr = JS_ToCString(ctx, exception);
+
+    if (strstr(errorCStr, "InternalError: interrupted") != NULL) {
+      GPRINT_CTAG(BOLDYELLOW, "[quick-scope-call]", "Interrupted by our int. handler!\n");
+      _gum_quick_script_dispose_cancelled_script (core->script);
+    } else {
+      _gum_quick_scope_catch_and_emit (self);
+    }
+
+    JS_FreeCString (ctx, errorCStr);
+    JS_FreeValue (ctx, exception);
+  }
 
   return result;
 }
@@ -2240,6 +2256,9 @@ _gum_quick_scope_perform_pending_io (GumQuickScope * self)
   }
   while (io_performed);
 }
+
+// XXX TODO: create a _gum_quick_scope_cancel that is a more abrupt version of
+// leave. It shouldn't process any io or finish any pending stalker state
 
 void
 _gum_quick_scope_leave (GumQuickScope * self)
