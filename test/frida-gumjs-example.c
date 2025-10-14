@@ -12,8 +12,6 @@
 #include <string.h>
 #include <unistd.h>
 
-extern gboolean glib_is_available (void);
-
 static void on_message (const gchar * message, GBytes * data, gpointer user_data);
 
 int
@@ -25,8 +23,6 @@ main (int argc,
   GError * error = NULL;
   GumScript * script;
   GMainContext * context;
-
-  g_printerr ("[debug] glib_is_available() = %d\n", glib_is_available ());
 
   gum_init_embedded ();
 
@@ -45,11 +41,7 @@ main (int argc,
       "  }\n"
       "});",
       NULL, cancellable, &error);
-  if(script == NULL)
-  {
-    g_printerr ("gum_script_backend_create_sync() failed: %s\n", error->message);
-    return 1;
-  }
+  g_assert (error == NULL);
 
   gum_script_set_message_handler (script, on_message, NULL, NULL);
 
@@ -59,8 +51,9 @@ main (int argc,
   close (open ("/etc/fstab", O_RDONLY));
 
   context = g_main_context_get_thread_default ();
-  while (g_main_context_pending (context))
-    g_main_context_iteration (context, FALSE);
+  while (g_main_context_pending (context)) 
+      g_main_context_iteration (context, FALSE);
+
 
   gum_script_unload_sync (script, cancellable);
 

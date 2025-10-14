@@ -61,9 +61,14 @@ if quickjs_dep.found()
     gumjs_sources += 'gumquickdatabase.c'
   endif
 
+
+  fallible = get_option('fallible_gprivate')
+  fallible_def = fallible ? ['-DGUM_FALLIBLE_GPRIVATE=1'] : ['-DGUM_FALLIBLE_GPRIVATE=0']
+
   quickcompile = executable('quickcompile', 'gumquickcompile.c',
     dependencies: [quickjs_dep_native, gio_dep_native],
     native: true,
+    c_args: '-DGUM_FALLIBLE_GPRIVATE=1',
   )
 else
   quickcompile = ''
