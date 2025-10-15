@@ -11,6 +11,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdio.h>
 
 extern gboolean glib_is_available (void);
 
@@ -26,7 +27,7 @@ main (int argc,
   GumScript * script;
   GMainContext * context;
 
-  g_printerr ("[debug] glib_is_available() = %d\n", glib_is_available ());
+  printf ("[debug] glib_is_available() = %d\n", glib_is_available ());
 
   gum_init_embedded ();
 
