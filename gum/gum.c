@@ -132,12 +132,6 @@ G_DEFINE_BOXED_TYPE (GumAddress, gum_address, gum_address_copy,
                      gum_address_free)
 
 
-static GQuark
-gum_error_quark_impl (void)
-{
-  return g_quark_from_static_string ("frida-gum");
-}
-
 gboolean
 try_gum_init_embedded (GError **error)
 {
@@ -150,6 +144,14 @@ try_gum_init_embedded (GError **error)
   }
 #endif
   gum_init_embedded ();
+#if defined(G_FALLIBLE_GPRIVATE)
+  /* Your patched GLib exports glib_is_available(). */
+  if (G_UNLIKELY (!glib_is_available ())) {
+    g_set_error (error, GUM_ERROR, GUM_ERROR_FAILED,
+                 "GLib TLS not available");
+    return FALSE;
+  }
+#endif
   return TRUE;
 }
 
