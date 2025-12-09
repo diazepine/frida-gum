@@ -2464,6 +2464,9 @@ gum_linux_parse_ucontext (const ucontext_t * uc,
   {
     struct _aarch64_ctx * head = (struct _aarch64_ctx *) &mc->__reserved[i];
 
+    if (head == NULL)
+      break;
+
     if (head->magic == 0)
       break;
 
