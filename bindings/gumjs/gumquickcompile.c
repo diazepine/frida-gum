@@ -11,6 +11,10 @@ struct _GumESAsset
   GFile * output_file;
 };
 
+#if defined(G_FALLIBLE_GPRIVATE)
+extern gboolean glib_is_available ();
+#endif
+
 static GumESAsset * gum_es_asset_new_from_file (const char * name,
     GError ** error);
 static char * gum_es_name_from_filesystem_path (const char * path);
@@ -39,6 +43,17 @@ main (int argc,
   JSValue val = JS_NULL;
 
   glib_init ();
+  gobject_init (); // Crashes on macos w/o this
+#if defined(G_FALLIBLE_GPRIVATE)
+  gboolean rc = glib_is_available ();
+  if (rc != TRUE)
+  {
+    g_printerr ("Failed to initialize GLib\n");
+    return 1;
+  } else {
+    g_print ("GLib initialized successfully\n");
+  }
+#endif
 
   if (argc >= 2 && strcmp (argv[1], "--bswap") == 0)
   {

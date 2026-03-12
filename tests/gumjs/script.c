@@ -14,6 +14,13 @@
 
 #include "script-fixture.c"
 
+#if defined(G_FALLIBLE_GPRIVATE)
+extern gboolean glib_is_available (void); /* from your glib-init.c */
+static inline gboolean tls_available (void) { return glib_is_available (); }
+#else
+static inline gboolean tls_available (void) { return TRUE; }
+#endif
+
 TESTLIST_BEGIN (script)
   TESTENTRY (invalid_script_should_return_null)
   TESTENTRY (strict_mode_should_be_enforced)
@@ -4956,6 +4963,10 @@ TESTCASE (execution_can_be_traced)
 {
   GumThreadId test_thread_id;
 
+  if (!tls_available ()) {
+    g_print ("<skipping, TLS unavailable> ");
+    return;
+  }
 #ifdef __ARM_PCS_VFP
   if (!g_test_slow ())
   {
@@ -5004,6 +5015,10 @@ TESTCASE (execution_can_be_traced_with_custom_transformer)
 {
   GumThreadId test_thread_id;
 
+  if (!tls_available ()) {
+    g_print ("<skipping, TLS unavailable> ");
+    return;
+  }
 #if defined (HAVE_QNX) || defined (__ARM_PCS_VFP)
   if (!g_test_slow ())
   {
@@ -5061,6 +5076,10 @@ TESTCASE (execution_can_be_traced_with_faulty_transformer)
 {
   GumThreadId test_thread_id;
 
+  if (!tls_available ()) {
+    g_print ("<skipping, TLS unavailable> ");
+    return;
+  }
 #ifdef HAVE_QNX
   if (!g_test_slow ())
   {
@@ -5093,6 +5112,10 @@ TESTCASE (execution_can_be_traced_with_faulty_transformer)
 
 TESTCASE (execution_can_be_traced_during_immediate_native_function_call)
 {
+  if (!tls_available ()) {
+    g_print ("<skipping, TLS unavailable> ");
+    return;
+  }
   COMPILE_AND_LOAD_SCRIPT (
       "Stalker.queueDrainInterval = 0;"
       "const testsRange = Process.getModuleByName('%s');"
@@ -5127,6 +5150,10 @@ TESTCASE (execution_can_be_traced_during_immediate_native_function_call)
 
 TESTCASE (execution_can_be_traced_during_scheduled_native_function_call)
 {
+  if (!tls_available ()) {
+    g_print ("<skipping, TLS unavailable> ");
+    return;
+  }
   COMPILE_AND_LOAD_SCRIPT (
       "Stalker.queueDrainInterval = 0;"
       "const testsRange = Process.getModuleByName('%s');"
@@ -5163,6 +5190,10 @@ TESTCASE (execution_can_be_traced_during_scheduled_native_function_call)
 
 TESTCASE (execution_can_be_traced_after_native_function_call_from_hook)
 {
+  if (!tls_available ()) {
+    g_print ("<skipping, TLS unavailable> ");
+    return;
+  }
   StalkerDummyChannel channel;
   GThread * thread;
   GumThreadId thread_id;
@@ -5263,6 +5294,10 @@ TESTCASE (basic_block_can_be_invalidated_for_current_thread)
   GumThreadId thread_id;
   gpointer target_function_int_addr;
 
+  if (!tls_available ()) {
+    g_print ("<skipping, TLS unavailable> ");
+    return;
+  }
 #if (defined (HAVE_ANDROID) && defined (HAVE_ARM)) || defined (HAVE_QNX)
   if (!g_test_slow ())
   {
@@ -5372,6 +5407,10 @@ TESTCASE (basic_block_can_be_invalidated_for_specific_thread)
   GumThreadId thread_id;
   gpointer target_function_int_addr;
 
+  if (!tls_available ()) {
+    g_print ("<skipping, TLS unavailable> ");
+    return;
+  }
 #if (defined (HAVE_ANDROID) && defined (HAVE_ARM)) || defined (HAVE_QNX)
   if (!g_test_slow ())
   {
@@ -5486,6 +5525,10 @@ TESTCASE (call_can_be_probed)
   GThread * thread;
   GumThreadId thread_id;
 
+  if (!tls_available ()) {
+    g_print ("<skipping, TLS unavailable> ");
+    return;
+  }
   sdc_init (&channel);
 
   thread = g_thread_new ("stalker-test-target",
@@ -5527,6 +5570,10 @@ run_stalked_through_target_function (gpointer data)
 {
   StalkerDummyChannel * channel = data;
 
+  if (!tls_available ()) {
+    g_print ("<skipping, TLS unavailable> ");
+    return NULL;
+  }
   sdc_put_thread_id (channel, gum_process_get_current_thread_id ());
 
   sdc_await_follow_confirmation (channel);
@@ -5542,6 +5589,10 @@ TESTCASE (stalker_events_can_be_parsed)
 {
   GumEvent ev;
 
+  if (!tls_available ()) {
+    g_print ("<skipping, TLS unavailable> ");
+    return;
+  }
   ev.type = GUM_CALL;
   ev.call.location = GSIZE_TO_POINTER (7);
   ev.call.target = GSIZE_TO_POINTER (12);
@@ -6147,6 +6198,10 @@ sleeping_dummy_func (gpointer data)
 static const gchar *
 get_local_thread_string_value (void)
 {
+#if defined(G_FALLIBLE_GPRIVATE)
+  if (!tls_available ())
+    return "(tls-unavailable)";
+#endif
   return g_private_get (&target_thread_string_value);
 }
 
@@ -7718,6 +7773,10 @@ TESTCASE (system_error_unaffected_by_replacement_if_untouched)
 
 TESTCASE (invocations_are_bound_on_tls_object)
 {
+  if (!tls_available ()) {
+    g_print ("<skipping, TLS unavailable> ");
+    return;
+  }
   COMPILE_AND_LOAD_SCRIPT (
       "Interceptor.attach(" GUM_PTR_CONST ", {"
       "  onEnter(args) {"
@@ -7741,6 +7800,11 @@ TESTCASE (invocations_are_bound_on_tls_object)
 TESTCASE (invocations_provide_thread_id)
 {
   guint i;
+
+  if (!tls_available ()) {
+    g_print ("<skipping, TLS unavailable> ");
+    return;
+  }
 
   COMPILE_AND_LOAD_SCRIPT (
       "Interceptor.attach(" GUM_PTR_CONST ", {"
@@ -7771,6 +7835,10 @@ TESTCASE (invocations_provide_thread_id)
 
 TESTCASE (invocations_provide_call_depth)
 {
+  if (!tls_available ()) {
+    g_print ("<skipping, TLS unavailable> ");
+    return;
+  }
   COMPILE_AND_LOAD_SCRIPT (
       "Interceptor.attach(" GUM_PTR_CONST ", {"
       "  onEnter(args) {"
@@ -7813,6 +7881,10 @@ TESTCASE (invocations_provide_call_depth)
 
 TESTCASE (invocations_provide_context_for_backtrace)
 {
+  if (!tls_available ()) {
+    g_print ("<skipping, TLS unavailable> ");
+    return;
+  }
   if (RUNNING_ON_VALGRIND)
   {
     g_print ("<skipping, not compatible with Valgrind> ");
@@ -7844,6 +7916,10 @@ TESTCASE (invocations_provide_context_for_backtrace)
 
 TESTCASE (invocations_provide_context_serializable_to_json)
 {
+  if (!tls_available ()) {
+    g_print ("<skipping, TLS unavailable> ");
+    return;
+  }
   COMPILE_AND_LOAD_SCRIPT (
       "Interceptor.attach(" GUM_PTR_CONST ", {"
       "  onEnter(args) {"
