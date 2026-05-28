@@ -410,6 +410,8 @@ gum_quick_script_finalize (GObject * object)
 {
   GumQuickScript * self = GUM_QUICK_SCRIPT (object);
 
+  g_rec_mutex_clear (&self->cancellation_mutex);
+
   g_free (self->name);
   if (self->thread_name)
     g_free (self->thread_name);
@@ -649,7 +651,9 @@ gum_quick_script_destroy_context (GumQuickScript * self)
     gum_quick_remove_interrupt_handler(self);
 
     self->is_cancelled = false;
-    g_rec_mutex_clear (&self->cancellation_mutex);
+    /* NOTE: cancellation_mutex is NOT cleared here.
+     * dispose() locks it after destroy_context runs (via unload),
+     * so it must remain valid until finalize(). */
 
     JS_FreeRuntime (self->rt);
     self->rt = NULL;
