@@ -410,7 +410,6 @@ gum_quick_script_dispose (GObject * object)
   gum_quick_script_set_message_handler (script, NULL, NULL, NULL);
 
   g_rec_mutex_lock (&self->interrupt_mutex);
-  if (self->state == GUM_SCRIPT_STATE_LOADED)
   g_rec_mutex_lock (&self->cancellation_mutex);
   if (self->state == GUM_SCRIPT_STATE_LOADED)
   {
@@ -425,8 +424,8 @@ gum_quick_script_dispose (GObject * object)
     g_clear_pointer (&self->main_context, g_main_context_unref);
     g_clear_pointer (&self->backend, g_object_unref);
   }
-  g_rec_mutex_unlock (&self->interrupt_mutex);
   g_rec_mutex_unlock (&self->cancellation_mutex);
+  g_rec_mutex_unlock (&self->interrupt_mutex);
 
   G_OBJECT_CLASS (gum_quick_script_parent_class)->dispose (object);
 }
@@ -437,6 +436,7 @@ gum_quick_script_finalize (GObject * object)
   GumQuickScript * self = GUM_QUICK_SCRIPT (object);
 
   g_rec_mutex_clear (&self->interrupt_mutex);
+  g_rec_mutex_clear (&self->cancellation_mutex);
 
   g_free (self->name);
   if (self->thread_name)
@@ -690,7 +690,9 @@ gum_quick_script_destroy_context (GumQuickScript * self)
      * finalize().
      */
     self->is_cancelled = false;
-    g_rec_mutex_clear (&self->cancellation_mutex);
+    /* NOTE: cancellation_mutex is NOT cleared here.
+     * dispose() locks it after destroy_context runs (via unload),
+     * so it must remain valid until finalize(). */
 
     JS_FreeRuntime (self->rt);
     self->rt = NULL;
@@ -829,54 +831,6 @@ gum_quick_script_on_runtime_loaded (JSValue error,
   }
 
   g_object_unref (self);
-}
-
-static int
-gum_cancellable_interrupt_handler (JSRuntime * runtime,
-                                   void * opaque)
-{
-  if (opaque == NULL)
-    return 0;
-  GumQuickScript *script = (GumQuickScript *) opaque;
-  g_object_ref(script);
-
-  int rc = 0;
-
-  g_rec_mutex_lock (&script->cancellation_mutex);
-  // Check if we are cancelled
-  if (script->is_cancelled) {
-    GPRINT_CTAG (ORANGE, "[int-handler]", "In our interrupt handler!!\n");
-    GDateTime * now = g_date_time_new_now_local();
-    gchar * timestamp_str = g_date_time_format(now, "%Y-%m-%d %H:%M:%S");
-    GPRINT_CTAG (ORANGE, "[int-handler]", "We (0x%p) are cancelled: %s!\n",
-        script, timestamp_str);
-    rc = 1;
-  }
-  g_rec_mutex_unlock (&script->cancellation_mutex);
-
-  g_object_unref (script);
-
-  return rc;
-}
-
-static void
-gum_quick_register_interrupt_handler(GumQuickScript * script) {
-  GPRINT_CTAG(ORANGE, "[int-handler-register]", "Registering int. handler!\n");
-
-  g_rec_mutex_lock (&script->cancellation_mutex);
-  g_assert (script->is_cancelled == false);
-  g_rec_mutex_unlock (&script->cancellation_mutex);
-
-
-  JS_SetInterruptHandler (script->rt, gum_cancellable_interrupt_handler,
-      script);
-}
-
-
-static void
-gum_quick_remove_interrupt_handler(GumQuickScript * script) {
-  GPRINT_CTAG(ORANGE, "[int-handler-remove]", "Removing int. handler!\n");
-  JS_SetInterruptHandler (script->rt, NULL, NULL);
 }
 
 #if 0
@@ -1329,9 +1283,11 @@ gum_quick_script_interrupt_handler (JSRuntime * runtime,
   int rc;
 
   g_rec_mutex_lock (&script->interrupt_mutex);
-  rc = script->interrupt != GUM_INTERRUPT_NONE;
+  g_rec_mutex_lock (&script->cancellation_mutex);
+  rc = script->interrupt != GUM_INTERRUPT_NONE || script->is_cancelled;
   if (script->interrupt == GUM_INTERRUPT_ONCE)
     script->interrupt = GUM_INTERRUPT_NONE;
+  g_rec_mutex_unlock (&script->cancellation_mutex);
   g_rec_mutex_unlock (&script->interrupt_mutex);
 
   return rc;
@@ -1341,7 +1297,10 @@ static void
 gum_quick_register_interrupt_handler (GumQuickScript * script)
 {
   g_rec_mutex_lock (&script->interrupt_mutex);
+  g_rec_mutex_lock (&script->cancellation_mutex);
   g_assert (script->interrupt == GUM_INTERRUPT_NONE);
+  g_assert (!script->is_cancelled);
+  g_rec_mutex_unlock (&script->cancellation_mutex);
   g_rec_mutex_unlock (&script->interrupt_mutex);
 
   JS_SetInterruptHandler (script->rt, gum_quick_script_interrupt_handler,
