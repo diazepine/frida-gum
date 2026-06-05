@@ -387,7 +387,7 @@ gum_quick_script_dispose (GObject * object)
   gum_quick_script_set_message_handler (script, NULL, NULL, NULL);
 
   g_rec_mutex_lock (&self->cancellation_mutex);
-  if (self->state == GUM_SCRIPT_STATE_LOADED || self->is_cancelled)
+  if (self->state == GUM_SCRIPT_STATE_LOADED)
   {
     /* dispose() will be triggered again at the end of unload() */
     gum_quick_script_unload (script, NULL, NULL, NULL);
@@ -409,6 +409,8 @@ static void
 gum_quick_script_finalize (GObject * object)
 {
   GumQuickScript * self = GUM_QUICK_SCRIPT (object);
+
+  g_rec_mutex_clear (&self->cancellation_mutex);
 
   g_free (self->name);
   if (self->thread_name)
@@ -649,7 +651,9 @@ gum_quick_script_destroy_context (GumQuickScript * self)
     gum_quick_remove_interrupt_handler(self);
 
     self->is_cancelled = false;
-    g_rec_mutex_clear (&self->cancellation_mutex);
+    /* NOTE: cancellation_mutex is NOT cleared here.
+     * dispose() locks it after destroy_context runs (via unload),
+     * so it must remain valid until finalize(). */
 
     JS_FreeRuntime (self->rt);
     self->rt = NULL;
@@ -1102,7 +1106,7 @@ gum_quick_script_do_unload (GumScriptTask * task,
                             GCancellable * cancellable)
 {
   g_rec_mutex_lock (&self->cancellation_mutex);
-  if (!self->is_cancelled || self->state != GUM_SCRIPT_STATE_LOADED) {
+  if (self->state != GUM_SCRIPT_STATE_LOADED) {
     g_rec_mutex_unlock (&self->cancellation_mutex);
     goto invalid_operation;
   }
