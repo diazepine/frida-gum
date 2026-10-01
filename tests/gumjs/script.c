@@ -56,6 +56,9 @@ TESTLIST_BEGIN (script)
   TESTENTRY (script_can_be_interrupted)
   TESTENTRY (script_interrupt_is_idempotent)
   TESTENTRY (script_can_be_terminated)
+  TESTENTRY (script_can_be_cancelled)
+  TESTENTRY (script_cancel_then_terminate_is_safe)
+  TESTENTRY (script_terminate_then_cancel_is_safe)
   TESTENTRY (script_interrupt_while_idle_is_ignored)
 
   TESTGROUP_BEGIN ("Thread")
@@ -13043,6 +13046,62 @@ TESTCASE (script_can_be_terminated)
   g_usleep (G_USEC_PER_SEC / 10);
 
   gum_script_terminate (script);
+
+  g_thread_join (worker);
+
+  g_object_unref (script);
+}
+
+TESTCASE (script_can_be_cancelled)
+{
+  GumScript * script;
+  GThread * worker;
+
+  script = create_endless_script (fixture);
+
+  worker = g_thread_new ("cancel-test-loader", load_script_worker, script);
+
+  g_usleep (G_USEC_PER_SEC / 10);
+
+  gum_script_cancel (script);
+
+  g_thread_join (worker);
+
+  g_object_unref (script);
+}
+
+TESTCASE (script_cancel_then_terminate_is_safe)
+{
+  GumScript * script;
+  GThread * worker;
+
+  script = create_endless_script (fixture);
+
+  worker = g_thread_new ("cancel-terminate-loader", load_script_worker, script);
+
+  g_usleep (G_USEC_PER_SEC / 10);
+
+  gum_script_cancel (script);
+  gum_script_terminate (script);
+
+  g_thread_join (worker);
+
+  g_object_unref (script);
+}
+
+TESTCASE (script_terminate_then_cancel_is_safe)
+{
+  GumScript * script;
+  GThread * worker;
+
+  script = create_endless_script (fixture);
+
+  worker = g_thread_new ("terminate-cancel-loader", load_script_worker, script);
+
+  g_usleep (G_USEC_PER_SEC / 10);
+
+  gum_script_terminate (script);
+  gum_script_cancel (script);
 
   g_thread_join (worker);
 

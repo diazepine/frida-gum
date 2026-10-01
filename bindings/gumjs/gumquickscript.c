@@ -65,8 +65,6 @@ struct _GumQuickScript
   GRecMutex interrupt_mutex;
   GumInterruptState interrupt;
   gboolean executing;
-  GRecMutex cancellation_mutex;
-  gboolean is_cancelled;
   GSList * on_unload;
   JSRuntime * rt;
   JSContext * ctx;
@@ -218,12 +216,6 @@ struct _GumWorkerMessageDelivery
   gchar * message;
   GBytes * data;
 };
-
-#if 0
-// To be used to query termination
-static GMutex gGumJSTerminationMutex;
-static gboolean gGumJSWasTerminated = false;
-#endif
 
 static void gum_quick_script_iface_init (gpointer g_iface, gpointer iface_data);
 
@@ -386,19 +378,10 @@ gum_quick_script_init (GumQuickScript * self)
   self->name = g_strdup ("agent");
 
   self->state = GUM_SCRIPT_STATE_CREATED;
+  g_rec_mutex_init (&self->interrupt_mutex);
+  self->interrupt = GUM_INTERRUPT_NONE;
+  self->executing = FALSE;
   self->on_unload = NULL;
-}
-
-void
-_gum_quick_script_dispose_cancelled_script (GumQuickScript * self)
-{
-  g_rec_mutex_lock (&self->cancellation_mutex);
-  if (self->is_cancelled) {
-    GPRINT_CTAG(BLUE, "[dispose-cancelled-script]", "script is cancelled, \
-            remove int. handler & teardown!\n");
-    gum_quick_script_dispose ((GObject *) self);
-  }
-  g_rec_mutex_unlock (&self->cancellation_mutex);
 }
 
 static void
@@ -410,7 +393,6 @@ gum_quick_script_dispose (GObject * object)
   gum_quick_script_set_message_handler (script, NULL, NULL, NULL);
 
   g_rec_mutex_lock (&self->interrupt_mutex);
-  g_rec_mutex_lock (&self->cancellation_mutex);
   if (self->state == GUM_SCRIPT_STATE_LOADED)
   {
     /* dispose() will be triggered again at the end of unload() */
@@ -424,7 +406,6 @@ gum_quick_script_dispose (GObject * object)
     g_clear_pointer (&self->main_context, g_main_context_unref);
     g_clear_pointer (&self->backend, g_object_unref);
   }
-  g_rec_mutex_unlock (&self->cancellation_mutex);
   g_rec_mutex_unlock (&self->interrupt_mutex);
 
   G_OBJECT_CLASS (gum_quick_script_parent_class)->dispose (object);
@@ -436,7 +417,6 @@ gum_quick_script_finalize (GObject * object)
   GumQuickScript * self = GUM_QUICK_SCRIPT (object);
 
   g_rec_mutex_clear (&self->interrupt_mutex);
-  g_rec_mutex_clear (&self->cancellation_mutex);
 
   g_free (self->name);
   if (self->thread_name)
@@ -604,11 +584,6 @@ gum_quick_script_create_context (GumQuickScript * self,
   g_bytes_unref (self->bytecode);
   self->bytecode = NULL;
 
-  g_rec_mutex_init (&self->interrupt_mutex);
-  self->interrupt = GUM_INTERRUPT_NONE;
-  self->executing = FALSE;
-  g_rec_mutex_init (&self->cancellation_mutex);
-  self->is_cancelled = false;
   gum_quick_register_interrupt_handler (self);
 
   return TRUE;
@@ -627,7 +602,7 @@ gum_quick_script_destroy_context (GumQuickScript * self)
 {
   GumQuickCore * core = &self->core;
 
-  GPRINT_CTAG_IC(BOLDMAGENTA, "[destroy-context]", "destroying context...");
+  GPRINT_CTAG(BOLDMAGENTA, "[destroy-context]", "destroying context...");
 
   g_assert (self->ctx != NULL);
 
@@ -668,7 +643,7 @@ gum_quick_script_destroy_context (GumQuickScript * self)
 
     _gum_quick_scope_leave (&scope);
 
-    GPRINT_C_IC(GREEN, "ok\n");
+    GPRINT_C(GREEN, "ok\n");
   }
 
   {
@@ -689,11 +664,6 @@ gum_quick_script_destroy_context (GumQuickScript * self)
      * destroy_context runs (via unload), so it must remain valid until
      * finalize().
      */
-    self->is_cancelled = false;
-    /* NOTE: cancellation_mutex is NOT cleared here.
-     * dispose() locks it after destroy_context runs (via unload),
-     * so it must remain valid until finalize(). */
-
     JS_FreeRuntime (self->rt);
     self->rt = NULL;
 
@@ -832,18 +802,6 @@ gum_quick_script_on_runtime_loaded (JSValue error,
 
   g_object_unref (self);
 }
-
-#if 0
-GUM_API void
-gum_quick_set_is_cancelled(gboolean status) {
-   g_mutex_init(&gGumJSTerminationMutex);
-   gGumJSWasTerminated = status;
-   GDateTime * now = g_date_time_new_now_local();
-   gchar * timestamp_str = g_date_time_format(now, "%Y-%m-%d %H:%M:%S");
-   g_print ("gum_quick_script_cancel: %d %s!\n", status, timestamp_str);
-   g_mutex_clear(&gGumJSTerminationMutex);
-}
-#endif
 
 static void
 gum_quick_script_execute_entrypoints (GumQuickScript * self,
@@ -1036,13 +994,6 @@ gum_quick_script_complete_load_task (GumScriptTask * task)
 
   if (terminating)
     gum_quick_script_unload (GUM_SCRIPT (self), NULL, NULL, NULL);
-  // handle cancelled script
-  g_rec_mutex_lock (&self->cancellation_mutex);
-  if (self->is_cancelled) {
-    // dispose and unload early
-    _gum_quick_script_dispose_cancelled_script(self);
-  }
-  g_rec_mutex_unlock (&self->cancellation_mutex);
 
   g_object_unref (self);
 
@@ -1069,11 +1020,7 @@ gum_quick_script_unload (GumScript * script,
 static void
 gum_quick_script_cancel (GumScript * script)
 {
-  GumQuickScript * self = GUM_QUICK_SCRIPT (script);
-
-  g_rec_mutex_lock (&self->cancellation_mutex);
-  self->is_cancelled = true;
-  g_rec_mutex_unlock (&self->cancellation_mutex);
+  gum_quick_script_terminate (script);
 }
 
 static void
@@ -1110,13 +1057,6 @@ gum_quick_script_do_unload (GumScriptTask * task,
     g_rec_mutex_unlock (&self->interrupt_mutex);
     goto invalid_operation;
   }
-  g_rec_mutex_lock (&self->cancellation_mutex);
-  if (self->state != GUM_SCRIPT_STATE_LOADED) {
-    g_rec_mutex_unlock (&self->cancellation_mutex);
-    goto invalid_operation;
-  }
-  g_rec_mutex_unlock (&self->cancellation_mutex);
-
   self->state = GUM_SCRIPT_STATE_UNLOADING;
   self->interrupt = GUM_INTERRUPT_NONE;
   g_rec_mutex_unlock (&self->interrupt_mutex);
@@ -1152,35 +1092,32 @@ gum_quick_script_try_unload (GumQuickScript * self)
   GumQuickScope scope;
   gboolean success;
 
-  g_rec_mutex_lock (&self->cancellation_mutex);
-  g_assert (self->state == GUM_SCRIPT_STATE_UNLOADING || self->is_cancelled);
-  GPRINT_CTAG_IC(BOLDMAGENTA, "[try-unload]", "is script cancelled: %d\n", self->is_cancelled);
-  g_rec_mutex_unlock (&self->cancellation_mutex);
+  g_assert (self->state == GUM_SCRIPT_STATE_UNLOADING);
 
   _gum_quick_scope_enter (&scope, &self->core);
 
-  GPRINT_CTAG_IC(BOLDMAGENTA, "[try-unload]", "flushing stalker...");
+  GPRINT_CTAG(BOLDMAGENTA, "[try-unload]", "flushing stalker...");
   _gum_quick_stalker_flush (&self->stalker);
-  GPRINT_C_IC(GREEN, "ok\n");
-  GPRINT_CTAG_IC(BOLDMAGENTA, "[try-unload]", "flushing interceptor...");
+  GPRINT_C(GREEN, "ok\n");
+  GPRINT_CTAG(BOLDMAGENTA, "[try-unload]", "flushing interceptor...");
   _gum_quick_interceptor_flush (&self->interceptor);
 #ifndef G_OS_NONE
-  GPRINT_C_IC(GREEN, "ok\n");
-  GPRINT_CTAG_IC(BOLDMAGENTA, "[try-unload]", "flushing socket...");
+  GPRINT_C(GREEN, "ok\n");
+  GPRINT_CTAG(BOLDMAGENTA, "[try-unload]", "flushing socket...");
   _gum_quick_socket_flush (&self->socket);
-  GPRINT_C_IC(GREEN, "ok\n");
-  GPRINT_CTAG_IC(BOLDMAGENTA, "[try-unload]", "flushing stream...");
+  GPRINT_C(GREEN, "ok\n");
+  GPRINT_CTAG(BOLDMAGENTA, "[try-unload]", "flushing stream...");
   _gum_quick_stream_flush (&self->stream);
 #endif
-  GPRINT_C_IC(GREEN, "ok\n");
-  GPRINT_CTAG_IC(BOLDMAGENTA, "[try-unload]", "flushing process...");
+  GPRINT_C(GREEN, "ok\n");
+  GPRINT_CTAG(BOLDMAGENTA, "[try-unload]", "flushing process...");
   _gum_quick_process_flush (&self->process);
-  GPRINT_C_IC(GREEN, "ok\n");
-  GPRINT_CTAG_IC(BOLDMAGENTA, "[try-unload]", "flushing core...");
+  GPRINT_C(GREEN, "ok\n");
+  GPRINT_CTAG(BOLDMAGENTA, "[try-unload]", "flushing core...");
   success = _gum_quick_core_flush (&self->core,
       (GumQuickFlushNotify) gum_quick_script_try_unload,
       g_object_ref (self), g_object_unref);
-  success ? ({GPRINT_C_IC(GREEN, "ok\n");}) : ({GPRINT_C_IC(BOLDRED, "failed\n");});
+  success ? ({GPRINT_C(GREEN, "ok\n");}) : ({GPRINT_C(BOLDRED, "failed\n");});
   _gum_quick_scope_leave (&scope);
 
   if (success)
@@ -1189,7 +1126,7 @@ gum_quick_script_try_unload (GumQuickScript * self)
 
     self->state = GUM_SCRIPT_STATE_UNLOADED;
 
-    GPRINT_CTAG_IC(BOLDMAGENTA, "[try-unload]", "running on_load callback...");
+    GPRINT_CTAG(BOLDMAGENTA, "[try-unload]", "running on_load callback...");
 
     while (self->on_unload != NULL)
     {
@@ -1203,8 +1140,8 @@ gum_quick_script_try_unload (GumQuickScript * self)
 
       self->on_unload = g_slist_delete_link (self->on_unload, link);
     }
-    GPRINT_C_IC(GREEN, "ok\n");
-    GPRINT_CTAG_IC(BOLDMAGENTA, "[try-unload]", "finished!\n");
+    GPRINT_C(GREEN, "ok\n");
+    GPRINT_CTAG(BOLDMAGENTA, "[try-unload]", "finished!\n");
   }
 }
 
@@ -1239,10 +1176,13 @@ static void
 gum_quick_script_terminate (GumScript * script)
 {
   GumQuickScript * self = GUM_QUICK_SCRIPT (script);
+  gboolean should_unload;
 
   g_rec_mutex_lock (&self->interrupt_mutex);
+  should_unload = self->state == GUM_SCRIPT_STATE_LOADED &&
+      self->interrupt != GUM_INTERRUPT_FOREVER;
   self->interrupt = GUM_INTERRUPT_FOREVER;
-  if (self->state == GUM_SCRIPT_STATE_LOADED)
+  if (should_unload)
     gum_quick_script_unload (script, NULL, NULL, NULL);
   g_rec_mutex_unlock (&self->interrupt_mutex);
 }
@@ -1283,11 +1223,9 @@ gum_quick_script_interrupt_handler (JSRuntime * runtime,
   int rc;
 
   g_rec_mutex_lock (&script->interrupt_mutex);
-  g_rec_mutex_lock (&script->cancellation_mutex);
-  rc = script->interrupt != GUM_INTERRUPT_NONE || script->is_cancelled;
+  rc = script->interrupt != GUM_INTERRUPT_NONE;
   if (script->interrupt == GUM_INTERRUPT_ONCE)
     script->interrupt = GUM_INTERRUPT_NONE;
-  g_rec_mutex_unlock (&script->cancellation_mutex);
   g_rec_mutex_unlock (&script->interrupt_mutex);
 
   return rc;
@@ -1297,10 +1235,7 @@ static void
 gum_quick_register_interrupt_handler (GumQuickScript * script)
 {
   g_rec_mutex_lock (&script->interrupt_mutex);
-  g_rec_mutex_lock (&script->cancellation_mutex);
   g_assert (script->interrupt == GUM_INTERRUPT_NONE);
-  g_assert (!script->is_cancelled);
-  g_rec_mutex_unlock (&script->cancellation_mutex);
   g_rec_mutex_unlock (&script->interrupt_mutex);
 
   JS_SetInterruptHandler (script->rt, gum_quick_script_interrupt_handler,
