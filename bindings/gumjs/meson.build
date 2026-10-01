@@ -193,27 +193,28 @@ gumjs_runtime_outputs = [
 ]
 
 if get_option('cmodule').allowed()
+  gum_runtime_dir = meson.project_source_root() / 'gum' / 'runtime'
   gumjs_runtime_sources += [
-    'runtime' / 'cmodule-tcc' / 'inttypes.h',
-    'runtime' / 'cmodule-tcc' / 'stdint.h',
-    'runtime' / 'cmodule-tcc' / 'stdio.h',
-    'runtime' / 'cmodule-tcc' / 'stdlib.h',
-    'runtime' / 'cmodule-tcc' / 'string.h',
-    'runtime' / 'cmodule' / 'glib.h',
-    'runtime' / 'cmodule' / 'gum' / 'gumdefs.h',
-    'runtime' / 'cmodule' / 'gum' / 'gumprocess.h',
-    'runtime' / 'cmodule' / 'gum' / 'gummodulemap.h',
-    'runtime' / 'cmodule' / 'gum' / 'gummemory.h',
-    'runtime' / 'cmodule' / 'gum' / 'guminterceptor.h',
-    'runtime' / 'cmodule' / 'gum' / 'gumstalker.h',
-    'runtime' / 'cmodule' / 'gum' / 'gummetalarray.h',
-    'runtime' / 'cmodule' / 'gum' / 'gummetalhash.h',
-    'runtime' / 'cmodule' / 'gum' / 'gumspinlock.h',
-    'runtime' / 'cmodule' / 'gum' / 'gumtls.h',
-    'runtime' / 'cmodule' / 'json-glib' / 'json-glib.h',
+    gum_runtime_dir / 'cmodule-tcc' / 'inttypes.h',
+    gum_runtime_dir / 'cmodule-tcc' / 'stdint.h',
+    gum_runtime_dir / 'cmodule-tcc' / 'stdio.h',
+    gum_runtime_dir / 'cmodule-tcc' / 'stdlib.h',
+    gum_runtime_dir / 'cmodule-tcc' / 'string.h',
+    gum_runtime_dir / 'cmodule' / 'glib.h',
+    gum_runtime_dir / 'cmodule' / 'gum' / 'gumdefs.h',
+    gum_runtime_dir / 'cmodule' / 'gum' / 'gumprocess.h',
+    gum_runtime_dir / 'cmodule' / 'gum' / 'gummodulemap.h',
+    gum_runtime_dir / 'cmodule' / 'gum' / 'gummemory.h',
+    gum_runtime_dir / 'cmodule' / 'gum' / 'guminterceptor.h',
+    gum_runtime_dir / 'cmodule' / 'gum' / 'gumstalker.h',
+    gum_runtime_dir / 'cmodule' / 'gum' / 'gummetalarray.h',
+    gum_runtime_dir / 'cmodule' / 'gum' / 'gummetalhash.h',
+    gum_runtime_dir / 'cmodule' / 'gum' / 'gumspinlock.h',
+    gum_runtime_dir / 'cmodule' / 'gum' / 'gumtls.h',
+    gum_runtime_dir / 'cmodule' / 'json-glib' / 'json-glib.h',
   ]
-  gumjs_runtime_outputs += ['gumcmodule-runtime.h']
 endif
+
 if quickjs_dep.found()
   gumjs_runtime_outputs += 'gumquickscript-runtime.h'
 endif
