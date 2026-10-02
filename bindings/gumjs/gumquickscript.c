@@ -269,8 +269,6 @@ static int gum_quick_script_interrupt_handler (JSRuntime * runtime,
     void * opaque);
 static void gum_quick_register_interrupt_handler (GumQuickScript * script);
 static void gum_quick_remove_interrupt_handler (GumQuickScript * script);
-static void gum_quick_script_cancel (GumScript * script);
-
 static void gum_quick_script_set_message_handler (GumScript * script,
     GumScriptMessageHandler handler, gpointer data,
     GDestroyNotify data_destroy);
@@ -360,8 +358,6 @@ gum_quick_script_iface_init (gpointer g_iface,
   iface->unload_sync = gum_quick_script_unload_sync;
   iface->interrupt = gum_quick_script_interrupt;
   iface->terminate = gum_quick_script_terminate;
-  iface->cancel = gum_quick_script_cancel;
-
   iface->set_message_handler = gum_quick_script_set_message_handler;
   iface->post = gum_quick_script_post;
   iface->set_thread_name = gum_quick_script_set_thread_name;
@@ -1014,13 +1010,6 @@ gum_quick_script_unload (GumScript * script,
   gum_script_task_run_in_js_thread (task,
       gum_quick_script_backend_get_scheduler (self->backend));
   g_object_unref (task);
-}
-
-// XXX This should be called after gum_quick_script_(load|load_sync)
-static void
-gum_quick_script_cancel (GumScript * script)
-{
-  gum_quick_script_terminate (script);
 }
 
 static void
