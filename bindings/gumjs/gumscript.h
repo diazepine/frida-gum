@@ -36,8 +36,6 @@ struct _GumScriptInterface
   void (* unload_sync) (GumScript * self, GCancellable * cancellable);
   void (* interrupt) (GumScript * self);
   void (* terminate) (GumScript * self);
-  void (* cancel) (GumScript * self);
-
 
   void (* set_message_handler) (GumScript * self,
       GumScriptMessageHandler handler, gpointer data,
@@ -66,7 +64,6 @@ GUM_API void gum_script_unload_sync (GumScript * self,
     GCancellable * cancellable);
 GUM_API void gum_script_interrupt (GumScript * self);
 GUM_API void gum_script_terminate (GumScript * self);
-GUM_API void gum_script_cancel (GumScript * self);
 
 GUM_API void gum_script_set_message_handler (GumScript * self,
     GumScriptMessageHandler handler, gpointer data,

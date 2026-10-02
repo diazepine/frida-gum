@@ -73,17 +73,6 @@ gum_script_terminate (GumScript * self)
 }
 
 void
-gum_script_cancel (GumScript * self)
-{
-  GumScriptInterface * iface = GUM_SCRIPT_GET_IFACE (self);
-
-  if (iface->cancel != NULL)
-    iface->cancel (self);
-  else
-    iface->terminate (self);
-}
-
-void
 gum_script_set_message_handler (GumScript * self,
                                 GumScriptMessageHandler handler,
                                 gpointer data,
