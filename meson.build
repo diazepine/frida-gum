@@ -737,6 +737,7 @@ if have_gumjs
   else
     libtcc_dep = disabler()
     libtcc_incdir = ''
+    cdata.set('HAVE_TINYCC', false)
   endif
 
   if host_arch == 'arm' and cc.has_function('__aeabi_memmove')
