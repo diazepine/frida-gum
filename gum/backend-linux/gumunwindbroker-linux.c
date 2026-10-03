@@ -163,7 +163,7 @@ typedef struct _Unwind_Exception _Unwind_Exception;
 typedef struct _Unwind_Context _Unwind_Context;
 struct dwarf_eh_bases;
 
-typedef unsigned long (* GumUnwindGetIpFunc) (struct _Unwind_Context *);
+typedef _Unwind_Word (* GumUnwindGetIpFunc) (struct _Unwind_Context *);
 
 extern _Unwind_Reason_Code __gxx_personality_v0 (int version,
     _Unwind_Action actions, uint64_t exception_class,
@@ -171,7 +171,7 @@ extern _Unwind_Reason_Code __gxx_personality_v0 (int version,
     __attribute__ ((weak));
 extern const void * _Unwind_Find_FDE (const void * pc,
     struct dwarf_eh_bases *);
-extern unsigned long _Unwind_GetIP (struct _Unwind_Context *);
+extern _Unwind_Word _Unwind_GetIP (struct _Unwind_Context *);
 
 static _Unwind_Reason_Code gum_unwind_broker_replacement_personality (
     int version, _Unwind_Action actions, uint64_t exception_class,
@@ -180,7 +180,7 @@ static GumAddress gum_unwind_get_untranslated_ip (
     struct _Unwind_Context * context);
 static const void * gum_unwind_broker_replacement_find_fde (const void * pc,
     struct dwarf_eh_bases * bases);
-static unsigned long gum_unwind_broker_replacement_get_ip (
+static _Unwind_Word gum_unwind_broker_replacement_get_ip (
     struct _Unwind_Context * context);
 
 static gpointer gum_unwind_real_get_ip;
@@ -280,7 +280,7 @@ gum_unwind_broker_replacement_find_fde (const void * pc,
   return _Unwind_Find_FDE (GSIZE_TO_POINTER (real_address - 1), bases);
 }
 
-static unsigned long
+static _Unwind_Word
 gum_unwind_broker_replacement_get_ip (struct _Unwind_Context * context)
 {
   GumAddress ip, real_address;
